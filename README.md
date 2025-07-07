@@ -21,5 +21,6 @@ src/
 - templates: .html 파일들 - 웹페이지 UI 디자인
 - static: 폰트, 이미지 등 변하지 않는 정적 파일
 - models: 개발한 모델 머신러닝 후 패키지 파일로 저장
+- requirements.txt: 터미널에서 "pip install -r requirements.txt" 사용 시 해당 텍스트에 기입된 라이브러리 일괄 설치
 
 ---
