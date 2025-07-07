@@ -6,6 +6,7 @@
 
 ---
 
+```
 src/
 ├── app.py
 ├── templates/
@@ -14,6 +15,7 @@ src/
 │ └── style.css
 ├── models/
 │ └── my_model.pkl
+```
 
 - app.py: Flask 구동되는 메인 파일
 - templates: .html 파일들 - 웹페이지 UI 디자인
