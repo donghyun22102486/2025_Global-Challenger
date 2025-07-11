@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=GOOGLE_API_KEY)
-print("🔑 API KEY 로딩:", GOOGLE_API_KEY)
+# print("🔑 API KEY 로딩:", GOOGLE_API_KEY)
 
 app = FastAPI()
 
@@ -41,9 +41,6 @@ print("⚠️ 예측에 필요한 feature 이름들:", feature_names)
 
 
 # --- Pydantic 모델 정의 ---
-from pydantic import BaseModel
-
-
 class FeatureInput(BaseModel):
     X_Minimum: float
     X_Maximum: float
