@@ -20,7 +20,7 @@ app = Flask(__name__)
 CORS(app)
 
 # --- 모델 및 Gemini API 키 설정 ---
-MODEL_PATH = "fault_prediction_model.pkl"
+MODEL_PATH = "../../models/fault_prediction_model.pkl"
 model_data = {}
 
 # 1. 기존 ML 모델 로드
