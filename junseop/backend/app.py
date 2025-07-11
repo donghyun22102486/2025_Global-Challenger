@@ -9,7 +9,8 @@ import datetime
 
 # --- 👇 [새로 추가된 Gemini 관련 라이브러리] 👇 ---
 import google.generativeai as genai
-from dotenv import load_dotenv # python-dotenv 라이브러리 사용
+from dotenv import load_dotenv  # python-dotenv 라이브러리 사용
+
 # ---------------------------------------------
 
 # .env 파일에서 환경 변수 로드
@@ -19,25 +20,28 @@ app = Flask(__name__)
 CORS(app)
 
 # --- 모델 및 Gemini API 키 설정 ---
-MODEL_PATH = 'fault_prediction_model.pkl'
+MODEL_PATH = "fault_prediction_model.pkl"
 model_data = {}
 
 # 1. 기존 ML 모델 로드
 try:
-    with open(MODEL_PATH, 'rb') as f:
+    with open(MODEL_PATH, "rb") as f:
         model_data = pickle.load(f)
     print(f"'{MODEL_PATH}' 로드 성공.")
 except FileNotFoundError:
-    print(f"경고: '{MODEL_PATH}'를 찾을 수 없습니다. 'train_model.py'를 먼저 실행해주세요.")
+    print(
+        f"경고: '{MODEL_PATH}'를 찾을 수 없습니다. 'train_model.py'를 먼저 실행해주세요."
+    )
 
 # 2. Gemini API 키 설정
 try:
-    GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
     genai.configure(api_key=GOOGLE_API_KEY)
     print("Gemini API 키 설정 완료.")
 except Exception as e:
     print(f"Gemini API 키 설정 오류: {e}")
 # ------------------------------------
+
 
 def generate_expert_report(fault_type, features):
     """
@@ -45,8 +49,10 @@ def generate_expert_report(fault_type, features):
     """
     # 프롬프트에 넣기 위해 변수들을 가공합니다.
     feature_list_str = ", ".join([f"'{f['feature']}'" for f in features])
-    feature_details_str = "\n".join([f"- **{f['feature']} (중요도: {f['importance']:.1%}):**" for f in features])
-    current_time_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    feature_details_str = "\n".join(
+        [f"- **{f['feature']} (중요도: {f['importance']:.1%}):**" for f in features]
+    )
+    current_time_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # --- Lyra님의 프롬프트를 f-string에 맞게 수정한 버전 ---
     # 파이썬 변수가 아닌 placeholder는 {{...}}로 감싸서 SyntaxError를 방지합니다.
@@ -103,7 +109,7 @@ AI 분석 시스템은 이번 불량 예측의 핵심 원인으로 다음 변수
 **보고 시간:** {current_time_str}
 """
     try:
-        llm = genai.GenerativeModel('gemini-1.5-flash')
+        llm = genai.GenerativeModel("gemini-1.5-flash")
         response = llm.generate_content(prompt)
         return response.text
     except Exception as e:
@@ -111,31 +117,46 @@ AI 분석 시스템은 이번 불량 예측의 핵심 원인으로 다음 변수
         return "전문가 보고서 생성에 실패했습니다. API 키 또는 네트워크 상태를 확인해주세요."
 
 
-@app.route('/api/predict', methods=['POST'])
+@app.route("/api/predict", methods=["POST"])
 def predict_fault():
+
     # 저장된 모델 데이터가 있는지 확인
     if not model_data:
         return jsonify({"error": "모델이 로드되지 않았습니다."}), 500
-    
-    xgb_model = model_data.get('model')
-    label_encoder = model_data.get('label_encoder')
-    feature_names = model_data.get('feature_names')
+
+    xgb_model = model_data.get("model")
+    label_encoder = model_data.get("label_encoder")
+    feature_names = model_data.get("feature_names")
+
+    # 🔒 JSON 요청이 아니면 거부
+    if not request.is_json:
+        return (
+            jsonify(
+                {
+                    "error": "Request must be JSON. Check that Content-Type is application/json."
+                }
+            ),
+            415,
+        )
 
     try:
+        input_data = request.get_json()
+
         # --- 1단계: 기존 ML 모델로 예측 및 분석 ---
         input_data = request.get_json()
         ordered_input_values = [input_data[name] for name in feature_names]
         input_df = pd.DataFrame([ordered_input_values], columns=feature_names)
-        
+
         prediction_encoded = xgb_model.predict(input_df)
         prediction_label = label_encoder.inverse_transform(prediction_encoded)[0]
-        
+
         importances = xgb_model.feature_importances_
-        feature_importance_df = pd.DataFrame({
-            'feature': feature_names,
-            'importance': importances
-        }).sort_values(by='importance', ascending=False).head(5)
-        top_5_features = feature_importance_df.to_dict(orient='records')
+        feature_importance_df = (
+            pd.DataFrame({"feature": feature_names, "importance": importances})
+            .sort_values(by="importance", ascending=False)
+            .head(5)
+        )
+        top_5_features = feature_importance_df.to_dict(orient="records")
         # ---------------------------------------------
 
         # --- 2단계: Gemini를 호출하여 전문가 리포트 생성 ---
@@ -143,15 +164,26 @@ def predict_fault():
         # ---------------------------------------------
 
         # --- 3단계: 두 결과를 합쳐서 프론트엔드로 전달 ---
-        return jsonify({
-            'predicted_fault': prediction_label,
-            'root_cause_analysis': top_5_features,
-            'expert_report': expert_report_text  # 새로 추가된 키
-        })
+        return jsonify(
+            {
+                "predicted_fault": prediction_label,
+                "root_cause_analysis": top_5_features,
+                "expert_report": expert_report_text,  # 새로 추가된 키
+            }
+        )
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True, port=5000)
+
+
+import requests
+
+url = "http://127.0.0.1:5000/api.predict"
+data = {"feature1": 0.5, "feature2": 1.2, "feature3": 3.1}
+
+response = requests.post(url, json=data)  # ✅ json= 쓰는 게 핵심!
+print(response.json())
