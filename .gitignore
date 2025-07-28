@@ -1,8 +1,7 @@
 # 1. 환경 설정
 .env
 .env.*
-.vscode/
-private/
+
 
 # 2. Python
 __pycache__/
@@ -35,3 +34,4 @@ frontend/.next/
 Thumbs.db
 .vscode/
 .idea/
+private/
