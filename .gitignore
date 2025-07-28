@@ -1,6 +1,7 @@
 # 1. 환경 설정
 .env
 .env.*
+.vscode/
 
 # 2. Python
 __pycache__/
