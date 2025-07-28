@@ -2,7 +2,7 @@
 
 ## 디렉터리 구조
 
-```
+```bash
 project-root/
 │
 ├── app/
@@ -19,5 +19,4 @@ project-root/
 │
 ├── data/
 │   └── ...
-
 ```

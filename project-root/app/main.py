@@ -1,5 +1,3 @@
-# main.py
-
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -8,12 +6,17 @@ from preprocess import run_numeric_preprocessing
 import pandas as pd
 import tempfile
 import os
-import uuid
+from datetime import datetime
+
 
 # FastAPI 앱 생성
 app = FastAPI()
-RESULT_DIR = "./results"
-os.makedirs(RESULT_DIR, exist_ok=True)
+
+DATA_DIR = "results/data"
+REPORT_DIR = "results/reports"
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(REPORT_DIR, exist_ok=True)
+
 
 # CORS 설정 (React 등과 연동 시 사용)
 app.add_middleware(
@@ -47,7 +50,8 @@ async def preprocess_file(file: UploadFile = File(...)):
         df = read_uploaded_file(file)
 
         # 2. 샘플 추출 및 프롬프트 생성
-        sample = pd.concat([df.head(20), df.sample(n=10, random_state=42), df.tail(10)])
+        n = min(10, len(df))
+        sample = pd.concat([df.head(20), df.sample(n=n, random_state=42), df.tail(10)])
         markdown_sample = sample.to_markdown(index=False)
         summary_stats = df.describe(include="all").to_markdown()
 
@@ -60,9 +64,9 @@ async def preprocess_file(file: UploadFile = File(...)):
         processed_df = run_numeric_preprocessing(df.copy(), llm_response)
 
         # 5. 파일 저장
-        file_id = str(uuid.uuid4())
-        csv_path = os.path.join(RESULT_DIR, f"{file_id}.csv")
-        report_path = os.path.join(RESULT_DIR, f"{file_id}_report.txt")
+        timestamp = datetime.now().strftime("%m%d%H%M")
+        csv_path = os.path.join(DATA_DIR, f"{timestamp}.csv")
+        report_path = os.path.join(REPORT_DIR, f"{timestamp}_report.txt")
 
         processed_df.to_csv(csv_path, index=False)
         with open(report_path, "w", encoding="utf-8") as f:
@@ -75,8 +79,8 @@ async def preprocess_file(file: UploadFile = File(...)):
             "columns": list(processed_df.columns),
             "preview": processed_df.head(5).to_dict(orient="records"),
             "llm_response": llm_response,
-            "download_url": f"/download/{file_id}",
-            "report_url": f"/download-report/{file_id}",
+            "download_url": f"/download/{timestamp}",
+            "report_url": f"/download-report/{timestamp}",
         }
 
     except Exception as e:
@@ -85,17 +89,15 @@ async def preprocess_file(file: UploadFile = File(...)):
 
 @app.get("/download/{file_id}")
 async def download_csv(file_id: str):
-    path = os.path.join(RESULT_DIR, f"{file_id}.csv")
+    path = os.path.join("data", f"{file_id}.csv")
     if not os.path.exists(path):
         return {"error": "CSV 파일을 찾을 수 없습니다."}
-    return FileResponse(
-        path, filename=f"processed_{file_id}.csv", media_type="text/csv"
-    )
+    return FileResponse(path, filename=f"{file_id}.csv", media_type="text/csv")
 
 
 @app.get("/download-report/{file_id}")
 async def download_report(file_id: str):
-    path = os.path.join(RESULT_DIR, f"{file_id}_report.txt")
+    path = os.path.join("reports", f"{file_id}_report.txt")
     if not os.path.exists(path):
         return {"error": "보고서 파일을 찾을 수 없습니다."}
-    return FileResponse(path, filename="expert_report.txt", media_type="text/plain")
+    return FileResponse(path, filename=f"{file_id}_report.txt", media_type="text/plain")
