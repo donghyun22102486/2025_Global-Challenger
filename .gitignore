@@ -2,6 +2,7 @@
 .env
 .env.*
 .vscode/
+private/
 
 # 2. Python
 __pycache__/
