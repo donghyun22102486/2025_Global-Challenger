@@ -48,5 +48,9 @@ def run_numeric_preprocessing(df: pd.DataFrame, llm_response: dict) -> pd.DataFr
     except Exception as e:
         print(f"⚠️ 결측치 처리 실패: {e}")
 
+    # 4. 범주형 → 원핫 인코딩
+    df = pd.get_dummies(df)
+    print("✅ 범주형 변수 원핫 인코딩 적용 완료")
+
     print(f"✅ 전처리 완료. 최종 컬럼: {df.columns.tolist()}")
     return df

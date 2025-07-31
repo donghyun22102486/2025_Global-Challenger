@@ -9,7 +9,7 @@ from datetime import datetime
 from llm_handler import create_llm_prompt, query_llm
 from preprocess import run_numeric_preprocessing
 from EDA import run_basic_eda
-
+from train import train_model
 
 # FastAPI 앱 생성
 app = FastAPI()
@@ -46,14 +46,17 @@ def read_uploaded_file(file: UploadFile) -> pd.DataFrame:
         raise ValueError("Only .csv and .xlsx files are supported.")
 
 
-@app.post("/preprocess")
+@app.post("/pipeline")
 async def preprocess_file(file: UploadFile = File(...)):
     try:
+        ## 전처리 및 보고서 생성 ##
+
         # 1. 파일 로딩 및 저장 경로 생성
         df = read_uploaded_file(file)
         timestamp = datetime.now().strftime("%m%d_%H%M")
 
         SAVE_DIR = f"results/{timestamp}"
+        MODEL_DIR = "models/"
         os.makedirs(SAVE_DIR, exist_ok=True)
 
         # 2. 샘플 추출 및 프롬프트 생성
@@ -79,7 +82,16 @@ async def preprocess_file(file: UploadFile = File(...)):
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(report_text)
 
-        # 6. 응답 반환
+        ## 모델 학습 ##
+
+        target_col = llm_response.get("target_column")
+
+        if not target_col:
+            return {"error": "❌ LLM 응답에 target_column 항목이 없습니다."}
+
+        metrics = train_model(processed_df, target_col=target_col, save_path=MODEL_DIR)
+
+        ## 응답 반환 ##
         return {
             "columns": list(processed_df.columns),
             "preview": processed_df.head(5).to_dict(orient="records"),
@@ -87,6 +99,7 @@ async def preprocess_file(file: UploadFile = File(...)):
             "csv_url": f"/download-csv/{timestamp}",
             "report_url": f"/download-report/{timestamp}",
             "eda_url": f"/download-eda/{timestamp}",
+            "model_url": f"/download-model/{timestamp}",
         }
 
     except Exception as e:
