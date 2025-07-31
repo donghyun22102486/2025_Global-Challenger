@@ -1,21 +1,24 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from llm_handler import create_llm_prompt, query_llm
-from preprocess import run_numeric_preprocessing
 import pandas as pd
 import tempfile
 import os
 from datetime import datetime
 
+from llm_handler import create_llm_prompt, query_llm
+from preprocess import run_numeric_preprocessing
+from EDA import run_basic_eda
+
 
 # FastAPI 앱 생성
 app = FastAPI()
 
-DATA_DIR = "results/data"
-REPORT_DIR = "results/reports"
-os.makedirs(DATA_DIR, exist_ok=True)
-os.makedirs(REPORT_DIR, exist_ok=True)
+# DATA_DIR = "results/data"
+# REPORT_DIR = "results/reports"
+# EDA_DIR = "results/EDA"
+# os.makedirs(DATA_DIR, exist_ok=True)
+# os.makedirs(REPORT_DIR, exist_ok=True)
 
 
 # CORS 설정 (React 등과 연동 시 사용)
@@ -46,8 +49,12 @@ def read_uploaded_file(file: UploadFile) -> pd.DataFrame:
 @app.post("/preprocess")
 async def preprocess_file(file: UploadFile = File(...)):
     try:
-        # 1. 파일 로딩
+        # 1. 파일 로딩 및 저장 경로 생성
         df = read_uploaded_file(file)
+        timestamp = datetime.now().strftime("%m%d_%H%M")
+
+        SAVE_DIR = f"results/{timestamp}"
+        os.makedirs(SAVE_DIR, exist_ok=True)
 
         # 2. 샘플 추출 및 프롬프트 생성
         n = min(10, len(df))
@@ -60,27 +67,26 @@ async def preprocess_file(file: UploadFile = File(...)):
         # 3. Gemini 호출 → JSON + 한글 보고서
         llm_response, report_text = query_llm(prompt)
 
-        # 4. 전처리 수행
+        # 4. 전처리 및 EDA 수행
         processed_df = run_numeric_preprocessing(df.copy(), llm_response)
+        run_basic_eda(processed_df.copy(), SAVE_DIR)
 
         # 5. 파일 저장
-        timestamp = datetime.now().strftime("%m%d%H%M")
-        csv_path = os.path.join(DATA_DIR, f"{timestamp}.csv")
-        report_path = os.path.join(REPORT_DIR, f"{timestamp}_report.txt")
+        csv_path = os.path.join(SAVE_DIR, f"preprocessed.csv")
+        report_path = os.path.join(SAVE_DIR, f"report.txt")
 
         processed_df.to_csv(csv_path, index=False)
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(report_text)
-
-        print(f"✅ 저장 완료: {csv_path}, {report_path}")
 
         # 6. 응답 반환
         return {
             "columns": list(processed_df.columns),
             "preview": processed_df.head(5).to_dict(orient="records"),
             "llm_response": llm_response,
-            "download_url": f"/download/{timestamp}",
+            "csv_url": f"/download-csv/{timestamp}",
             "report_url": f"/download-report/{timestamp}",
+            "eda_url": f"/download-eda/{timestamp}",
         }
 
     except Exception as e:
@@ -101,3 +107,13 @@ async def download_report(file_id: str):
     if not os.path.exists(path):
         return {"error": "보고서 파일을 찾을 수 없습니다."}
     return FileResponse(path, filename=f"{file_id}_report.txt", media_type="text/plain")
+
+
+@app.get("/download-eda/{file_id}")
+async def download_eda_heatmap(file_id: str):
+    path = os.path.join("results", file_id, "correlation_heatmap.png")
+    if not os.path.exists(path):
+        return {"error": "EDA 이미지 파일을 찾을 수 없습니다."}
+    return FileResponse(
+        path, filename="correlation_heatmap.png", media_type="image/png"
+    )
