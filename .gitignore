@@ -34,5 +34,8 @@ frontend/.next/
 Thumbs.db
 .vscode/
 .idea/
+
+##
 private/
 results/
+models/
