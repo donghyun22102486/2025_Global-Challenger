@@ -1,0 +1,41 @@
+# 1. 환경 설정
+.env
+.env.*
+
+
+# 2. Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.venv/
+env/
+venv/
+
+# 3. Jupyter
+.ipynb_checkpoints/
+
+# 4. 데이터 & 출력
+data/
+*.csv
+*.xlsx
+*.json
+app/static/reports/
+
+# 5. Frontend
+frontend/node_modules/
+frontend/.env
+frontend/build/
+frontend/dist/
+frontend/.next/
+
+# 6. OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+##
+private/
+results/
+models/
