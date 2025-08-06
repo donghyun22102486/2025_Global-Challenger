@@ -30,26 +30,37 @@ def run_numeric_preprocessing(df: pd.DataFrame, llm_response: dict) -> pd.DataFr
     # 3. 결측치 처리
     strategy = llm_response.get("missing_strategy", "mean")
     try:
+        num_cols = df.select_dtypes(include="number").columns
+        cat_cols = df.select_dtypes(exclude="number").columns
+
         if strategy == "drop":
             df.dropna(inplace=True)
         elif strategy == "mean":
-            df.fillna(df.mean(numeric_only=True), inplace=True)
+            df[num_cols] = df[num_cols].fillna(df[num_cols].mean())
+            df[cat_cols] = df[cat_cols].fillna("missing")
         elif strategy == "median":
-            df.fillna(df.median(numeric_only=True), inplace=True)
+            df[num_cols] = df[num_cols].fillna(df[num_cols].median())
+            df[cat_cols] = df[cat_cols].fillna("missing")
         elif strategy == "zero":
-            df.fillna(0, inplace=True)
+            df[num_cols] = df[num_cols].fillna(0)
+            df[cat_cols] = df[cat_cols].fillna("missing")
+        elif strategy == "mode":
+            for col in cat_cols:
+                if not df[col].mode().empty:
+                    df[col] = df[col].fillna(df[col].mode()[0])
         elif strategy == "ffill":
             df.fillna(method="ffill", inplace=True)
         elif strategy == "none":
             pass
         else:
             print(f"⚠️ 알 수 없는 결측치 처리 방식: {strategy}")
+
         print(f"✅ 결측치 처리 방식 적용: {strategy}")
     except Exception as e:
         print(f"⚠️ 결측치 처리 실패: {e}")
 
     # 4. 범주형 → 원핫 인코딩
-    df = pd.get_dummies(df)
+    df = pd.get_dummies(df, drop_first=False)
     print("✅ 범주형 변수 원핫 인코딩 적용 완료")
 
     print(f"✅ 전처리 완료. 최종 컬럼: {df.columns.tolist()}")
