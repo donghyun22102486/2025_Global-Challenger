@@ -16,7 +16,6 @@ from train import train_model
 
 app = FastAPI()
 
-# CORS 설정
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,9 +25,6 @@ app.add_middleware(
 )
 
 
-# -----------------------
-# 유틸 함수
-# -----------------------
 def read_uploaded_file(file: UploadFile) -> pd.DataFrame:
     suffix = file.filename.split(".")[-1]
     with tempfile.NamedTemporaryFile(delete=False, suffix=f".{suffix}") as tmp:
@@ -43,23 +39,19 @@ def read_uploaded_file(file: UploadFile) -> pd.DataFrame:
 
 
 def run_preprocessing_pipeline(df: pd.DataFrame, user_request: str, save_dir: str):
-    # 샘플 & 통계 생성
     n = min(10, len(df))
     sample = pd.concat([df.head(20), df.sample(n=n, random_state=42), df.tail(10)])
     markdown_sample = sample.to_markdown(index=False)
     summary_stats = df.describe(include="all").to_markdown()
 
-    # LLM 호출
     prompt = create_llm_prompt(
         markdown_sample, summary_stats, user_request=user_request
     )
     llm_response, report_text = query_llm(prompt)
 
-    # 전처리 + EDA
     processed_df = run_numeric_preprocessing(df.copy(), llm_response)
     run_basic_eda(processed_df.copy(), save_dir)
 
-    # 저장
     processed_df.to_csv(os.path.join(save_dir, "preprocessed.csv"), index=False)
     with open(os.path.join(save_dir, "report.txt"), "w", encoding="utf-8") as f:
         f.write(report_text)
@@ -67,14 +59,40 @@ def run_preprocessing_pipeline(df: pd.DataFrame, user_request: str, save_dir: st
     return processed_df, llm_response, report_text
 
 
-# -----------------------
-# API 엔드포인트
-# -----------------------
+def get_model_bundle(model_file: str):
+    """모델 번들을 로드하고 (model, features) 반환"""
+    if model_file:
+        path = os.path.join("models", model_file)
+    else:
+        model_list = sorted(
+            glob.glob("models/*.pkl"), key=os.path.getmtime, reverse=True
+        )
+        if not model_list:
+            raise FileNotFoundError("저장된 모델이 없습니다.")
+        path = model_list[0]
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"모델 파일을 찾을 수 없습니다: {model_file}")
+
+    bundle = joblib.load(path)
+
+    if isinstance(bundle, dict) and "model" in bundle and "features" in bundle:
+        return bundle["model"], bundle["features"]
+
+    model = bundle
+    features_json_path = path.replace(".pkl", "_features.json")
+    if not os.path.exists(features_json_path):
+        raise FileNotFoundError("해당 모델의 feature 목록 파일이 없습니다.")
+    with open(features_json_path, "r") as f:
+        features = json.load(f)
+    return model, features
+
+
 @app.post("/process")
 async def process_file(
     file: UploadFile = File(...),
-    process_option: str = Form(...),  # "full", "preprocess_only", "train_only"
-    model_type: str = Form("rf"),  # rf, gbr
+    process_option: str = Form(...),
+    model_type: str = Form("rf"),
     target_col_override: str = Form(None),
     user_request_text: str = Form(None),
     user_request_file: UploadFile = File(None),
@@ -82,7 +100,6 @@ async def process_file(
     try:
         df = read_uploaded_file(file)
 
-        # 사용자 요청 처리
         user_request = ""
         if user_request_text:
             user_request = user_request_text
@@ -149,9 +166,7 @@ async def predict_natural_language(
     user_request: str = Form(...), model_file: str = Form(None)
 ):
     try:
-        model_path = get_model_path(model_file)
-        model = joblib.load(model_path)
-        features = load_model_features(model_path)
+        model, features = get_model_bundle(model_file)
 
         prompt = f"""
         아래는 모델이 예측에 사용하는 feature 목록입니다:
@@ -169,7 +184,7 @@ async def predict_natural_language(
         prediction = model.predict(df)
 
         return {
-            "model_used": os.path.basename(model_path),
+            "model_used": model_file or "latest",
             "user_request": user_request,
             "parsed_input": clean_input,
             "prediction": float(prediction[0]),
@@ -182,14 +197,12 @@ async def predict_natural_language(
 async def predict(input_data: str = Form(...), model_file: str = Form(None)):
     try:
         input_dict = json.loads(input_data)
-        model_path = get_model_path(model_file)
-        model = joblib.load(model_path)
-        features = load_model_features(model_path)
+        model, features = get_model_bundle(model_file)
         clean_input = {col: input_dict.get(col, 0) for col in features}
         df = pd.DataFrame([clean_input])[features]
         prediction = model.predict(df)
         return {
-            "model_used": os.path.basename(model_path),
+            "model_used": model_file or "latest",
             "input": clean_input,
             "prediction": float(prediction[0]),
         }
@@ -209,30 +222,6 @@ async def list_models():
         return {"models": models}
     except Exception as e:
         return {"error": str(e)}
-
-
-# 공통 유틸
-def get_model_path(model_file: str):
-    if model_file:
-        path = os.path.join("models", model_file)
-    else:
-        model_list = sorted(
-            glob.glob("models/*.pkl"), key=os.path.getmtime, reverse=True
-        )
-        if not model_list:
-            raise FileNotFoundError("저장된 모델이 없습니다.")
-        path = model_list[0]
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"모델 파일을 찾을 수 없습니다: {model_file}")
-    return path
-
-
-def load_model_features(model_path: str):
-    features_json_path = model_path.replace(".pkl", "_features.json")
-    if not os.path.exists(features_json_path):
-        raise FileNotFoundError("해당 모델의 feature 목록 파일이 없습니다.")
-    with open(features_json_path, "r") as f:
-        return json.load(f)
 
 
 @app.get("/download/{file_id}/{file_type}")
