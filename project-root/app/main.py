@@ -9,7 +9,12 @@ import glob
 import json
 from datetime import datetime
 
-from llm_handler import create_llm_prompt, query_llm
+from llm_handler import (
+    create_llm_prompt,
+    query_llm,
+    query_llm_plain,
+    create_prediction_explanation_prompt,
+)
 from preprocess import run_numeric_preprocessing
 from EDA import run_basic_eda
 from train import train_model
@@ -206,6 +211,21 @@ async def predict(input_data: str = Form(...), model_file: str = Form(None)):
             "input": clean_input,
             "prediction": float(prediction[0]),
         }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/explain-prediction")
+async def explain_prediction(prediction_result: str = Form(...)):
+    try:
+        result_dict = json.loads(prediction_result)
+        prompt = create_prediction_explanation_prompt(
+            user_request=result_dict["user_request"],
+            parsed_input=result_dict["parsed_input"],
+            prediction=result_dict["prediction"],
+        )
+        report = query_llm_plain(prompt)  # ✅ JSON 파싱 없이 전체 텍스트
+        return {"explanation": report}
     except Exception as e:
         return {"error": str(e)}
 

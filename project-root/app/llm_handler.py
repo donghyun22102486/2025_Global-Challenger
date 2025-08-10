@@ -37,6 +37,7 @@ def query_llm(prompt: str):
     try:
         response = model.generate_content(prompt)
         reply = response.text
+        # print("LLM 응답:\n", reply)
 
         # JSON 추출 (정규식 사용)
         json_match = re.search(r"\{.*\}", reply, re.S)
@@ -57,3 +58,26 @@ def query_llm(prompt: str):
 
     except Exception as e:
         raise RuntimeError(f"[Gemini API Error] {e}")
+
+
+def query_llm_plain(prompt: str) -> str:
+    try:
+        response = model.generate_content(prompt)
+        return response.text.strip()  # 📌 전체 텍스트 그대로 반환
+    except Exception as e:
+        raise RuntimeError(f"[Gemini API Error] {e}")
+
+
+def create_prediction_explanation_prompt(
+    user_request: str, parsed_input: dict, prediction: float
+) -> str:
+    with open(
+        "prompt_templates/prediction_explanation_template.txt", "r", encoding="utf-8"
+    ) as f:
+        raw_template = f.read()
+    template = Template(raw_template)
+    return template.substitute(
+        user_request=user_request,
+        parsed_input=json.dumps(parsed_input, indent=2, ensure_ascii=False),
+        prediction=round(prediction, 2),
+    )
