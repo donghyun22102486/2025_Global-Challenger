@@ -123,6 +123,4 @@ file_type: "csv", "report", "eda"
 ## 확장 가능성
 
 - 더 많은 모델 추가 (XGBoost, CatBoost 등)
-- 전처리 전략 자동 추천
-- EDA HTML 대시보드 출력
-- 프론트엔드 React 연결
+- UI 개선 (사용자 자유도 확장)
